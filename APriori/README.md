@@ -25,3 +25,13 @@ This signifies the likelihood of the itemset Y being purchased when item X is pu
 **conv(X -> Y)** = (1 - supp(X)) / (1 - conf(X -> Y))
 
 The conviction value of 1.32 means that the rule {onion,potato}=>{burger} would be incorrect 32% more often if the association between X and Y was an accidental chance.
+
+## A priori
+
+Apriori algorithm is a classical algorithm in data mining. It is used for mining frequent itemsets and association rules in a database.
+
+It is basically mining itemsets which support is above a given threshold.
+
+There are 2 main rules to improve the efficiency of the algorithm:
+1. all subsets of a frequent itemset must be frequent
+2. for any infrequent itemset, all super itemsets must be infrequent too (so it is useless to test them)
