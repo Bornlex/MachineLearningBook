@@ -5,6 +5,7 @@ import numpy as np
 import math
 import os
 import pdb
+import multiprocessing, joblib
 
 
 DATASETS_PREFIX    = '../Datasets/MNIST'
@@ -23,24 +24,20 @@ def d_sigmoid(x):
 
 def softmax(x):
     e_x = np.exp(x - np.max(x))
-    return e_x / e_x.sum()
-
-#def d_softmax(x):
-#    tmp = x.reshape((-1,1))
-#    return np.diag(x) - np.dot(tmp, tmp.T)
+    return e_x / np.sum(e_x)
 
 def d_softmax(x):
-    #This function has not yet been tested.
-    return x.T * (1 - x)
+    tmp = x.reshape((-1,1))
+    return np.diag(x) - np.dot(tmp, tmp.T)
 
 def tanh(x):
     return np.tanh(x)
 
 def d_tanh(x):
-    return 1 - x.T * x
+    return 1.0 - (np.tanh(x).T * np.tanh(x))
 
 def normalize(image):
-    return image / (255.0 * 0.99 + 0.01)
+    return image / 255.0
 
 ### !UTILS
 
@@ -55,50 +52,64 @@ class NeuralNetwork(object):
     @_alpha   : learning rate
     """
     def __init__(self, xshape, yshape):
-        self._neurones_nb = 20
-        self._input       = None
-        self._weights1    = np.random.randn(xshape, self._neurones_nb)
-        self._weights2    = np.random.randn(self._neurones_nb, yshape)
-        self._y           = np.mat(np.zeros(yshape))
-        self._output      = np.mat(np.zeros(yshape))
-        self._alpha1      = 0.01
-        self._alpha2      = 0.01
-        self._function    = sigmoid
-        self._derivative  = d_sigmoid
-        self._epoch       = 1
+        ### NEURAL NETWORK PARAMETERS ###
+        self._hidden_layers = 3
+        self._neurones_nb   = 50
+        self._input         = None
+        self._weights_in    = np.random.randn(xshape, self._neurones_nb)
+        self._weights_hi    = [np.random.randn(self._neurones_nb, self._neurones_nb)] * (self._hidden_layers - 1)
+        self._weights_out   = np.random.randn(self._neurones_nb, yshape)
+        self._weights       = [self._weights_in] + self._weights_hi + [self._weights_out]
+        self._y             = np.mat(np.zeros(yshape))
+        self._output        = np.mat(np.zeros(yshape))
+        self._layers        = []
+        ### COMPUTATIONAL PARAMETERS ###
+        self._learning_rate = 0.01
+        self._epoch         = 1
 
     def Train(self, xs, ys):
         for j in range(self._epoch):
-            for i in range(len(xs)):
-                self._input = normalize(np.mat(xs[i]))
-                self._y[0, ys[i]] = 1
-                self.feedforward()
-                self.backpropagation()
-                self._y[0, ys[i]] = 0
+            self._train(xs, ys, j)
 
     def Predict(self, image):
         self._input = normalize(image)
-        self.feedforward()
-        return self._output
+        out = self.feedforward()
+        return out
+
+    def _train(self, xs, ys, epoch):
+        print(f'* epoch {epoch} / {self._epoch}')
+        for i in range(len(xs)):
+            if i % 5000 == 0: print(f'{i} / {len(xs)}')
+            self._input = normalize(np.mat(xs[i]))
+            self._y[0, ys[i]] = 1
+            self.feedforward()
+            self.backpropagation()
+            self._y[0, ys[i]] = 0
     
     def feedforward(self):
-        self._layer1 = self._function(np.dot(self._input, self._weights1))
-        self._output = self._function(np.dot(self._layer1, self._weights2))
+        current_layer = self._input.copy()
+        self._layers = []
+        for index in range(self._hidden_layers):
+            current_layer = tanh(np.dot(current_layer, self._weights[index]))
+            self._layers.append(current_layer)
+        self._output = softmax(np.dot(current_layer, self._weights[self._hidden_layers]))
+        return self._output
 
     def backpropagation(self):
-        d_weights2 = np.dot(
-            self._layer1.T,
-            2 * (self._y - self._output) * self._derivative(self._output)
-        )
-        d_weights1 = np.dot(
-            self._input.T,
-            np.dot(
-                2 * (self._y - self._output) * self._derivative(self._output),
-                self._weights2.T
-            ) * self._derivative(self._layer1)
-        )
-        self._weights1 += self._alpha1 * d_weights1
-        self._weights2 += self._alpha2 * d_weights2
+        err = 2 * (self._y - self._output) * d_softmax(self._output)
+        d_weights = [None] * len(self._weights)
+        d_weights[-1] = self._layers[-1].T * err
+        wei = None
+        for index in range(self._hidden_layers):
+            out = self._layers[-(index + 2)] if (-index - 2) >= -self._hidden_layers else self._input
+            wei = self._weights[-(index + 1)]
+            err = err * wei.T
+            d_weights[-(index + 2)] = d_tanh(out.T) * err
+            """
+            There is something to fix here...
+            d_tanh should not be used like that.
+            """
+        self._weights = [self._weights[i] + (self._learning_rate * d_weights[i]) for i in range(len(self._weights))]
 
 if __name__ == '__main__':
     neural_network = NeuralNetwork(len(TRAINING_IMAGES[0]), 10)
@@ -106,6 +117,7 @@ if __name__ == '__main__':
     neural_network.Train(TRAINING_IMAGES, TRAINING_LABELS)
     print('* testing neural network')
     count = 0
+    import pdb; pdb.set_trace()
     for i in range(len(TESTING_IMAGES)):
         image       = np.mat(TESTING_IMAGES[i])
         expected    = TESTING_LABELS[i]
