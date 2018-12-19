@@ -92,23 +92,19 @@ class NeuralNetwork(object):
         for index in range(self._hidden_layers):
             current_layer = tanh(np.dot(current_layer, self._weights[index]))
             self._layers.append(current_layer)
-        self._output = softmax(np.dot(current_layer, self._weights[self._hidden_layers]))
+        self._output = tanh(np.dot(current_layer, self._weights[self._hidden_layers]))
         return self._output
 
     def backpropagation(self):
-        err = 2 * (self._y - self._output) * d_softmax(self._output)
-        d_weights = [None] * len(self._weights)
-        d_weights[-1] = self._layers[-1].T * err
+        err = 2 * (self._y - self._output) * d_tanh(self._output)
+        import pdb; pdb.set_trace()
+        d_weights = [err.T * d_tanh(self._weights[-1] * self._output.T).T] * len(self._weights)
+        d_weights[-1] = d_weights[-1] * self._layers[-1]
         wei = None
         for index in range(self._hidden_layers):
             out = self._layers[-(index + 2)] if (-index - 2) >= -self._hidden_layers else self._input
-            wei = self._weights[-(index + 1)]
-            err = err * wei.T
-            d_weights[-(index + 2)] = d_tanh(out.T) * err
-            """
-            There is something to fix here...
-            d_tanh should not be used like that.
-            """
+            wei = self._weights[-(index + 2)]
+            d_weights[-(index + 2)] = d_weights[-(index + 2)] * d_tanh(wei * out)
         self._weights = [self._weights[i] + (self._learning_rate * d_weights[i]) for i in range(len(self._weights))]
 
 if __name__ == '__main__':
@@ -117,7 +113,7 @@ if __name__ == '__main__':
     neural_network.Train(TRAINING_IMAGES, TRAINING_LABELS)
     print('* testing neural network')
     count = 0
-    import pdb; pdb.set_trace()
+    #import pdb; pdb.set_trace()
     for i in range(len(TESTING_IMAGES)):
         image       = np.mat(TESTING_IMAGES[i])
         expected    = TESTING_LABELS[i]
